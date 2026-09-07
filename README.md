@@ -1,6 +1,6 @@
 # Citeio
 
-![Status](https://img.shields.io/badge/status-in%20development-blue)
+![Status](https://img.shields.io/badge/status-revival%20in%20progress-orange)
 ![License](https://img.shields.io/badge/license-proprietary-red)
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -12,7 +12,7 @@
 <br />
 
 <p align="center">
-<a href="[https://www.citeio.com](https://www.citeio.com)" target="\_blank"\>
+<a href="https://www.citeio.com" target="\_blank"\>
 <strong>► See It In Action: Visit the Live Platform at Citeio.com ◄</strong>
 </a>
 </p>
@@ -120,7 +120,7 @@ This project is built on a modern, robust, and scalable technology stack, levera
 | Category   | Technologies                                               |
 | :--------- | :--------------------------------------------------------- |
 | **Frontend** | `Next.js`, `React`, `TypeScript`, `Tailwind CSS`           |
-| **Backend** | `Python`, `FastAPI`, `Celery`, `Redis`                     |
+| **Backend** | `Python`, `Flask`, `Celery`, `Redis`                     |
 | **AI / ML** | `Google Gemini`, `Google Text Embedding v4`                |
 | **Database** | `MongoDB` (for metadata), `MongoDB Vector Search` (for vectors)      |
 | **Deployment** | `Vercel` (Frontend), `Cloudflare Tunnel` (API), `Mac Mini` (Self-Hosted), `DigitalOcean` (BTCPay Server), `Docker` |
@@ -129,7 +129,9 @@ This project is built on a modern, robust, and scalable technology stack, levera
 
 ## ► Project Status & Roadmap
 
-**Current Status:** Citeio is **Live and Operational**. The core platform for media analysis and semantic search is stable and available at [Citeio.com](https://citeio.com).
+**Current Status:** Citeio is in **revival / reorganization**. The product stack lives in private repos [`citeio-web`](https://github.com/IndigoNakamoto/citeio-web) (Next.js) and [`citeio-api`](https://github.com/IndigoNakamoto/citeio-api) (Flask + Celery). The public site and demo are being brought back up — treat live URLs as unreliable until health checks are green again.
+
+This public repository remains a **showcase** (architecture, vision, pricing). Proprietary application source is not published here.
 
 **What's Next:** Our roadmap is focused on expanding data sources and deepening analytical capabilities.
 
@@ -147,7 +149,7 @@ This project is built on a modern, robust, and scalable technology stack, levera
 
 ## ► Proprietary Source Code
 
-Please note that Citeio is a commercial product. The source code is proprietary and not available in this public repository. This repository serves as a professional showcase of the project's architecture, features, and vision.
+Please note that Citeio is a commercial product. Application source lives in private repositories [`citeio-web`](https://github.com/IndigoNakamoto/citeio-web) and [`citeio-api`](https://github.com/IndigoNakamoto/citeio-api). This public repository is a professional showcase of architecture, features, and vision.
 
 ## ► Contact & Inquiries
 
