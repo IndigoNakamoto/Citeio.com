@@ -7,170 +7,124 @@
 ![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
 
+Research note on source-anchored retrieval for long-form audio and video.
+
 **Media ingest → time-coded transcript → topic segmentation → semantic search that returns timestamped segments tied to the original content.**
 
 > **Status:** Revival / reorganization. Core application code is private. The domain citeio.com is no longer controlled by this project. This public repository is a showcase of the architecture and retrieval approach.
 
-A search hit is a piece of the source you can inspect: topic, transcript excerpt, start and end times, and the media that excerpt came from.
+The unit of retrieval is a topic span. A model names where a topic starts. The text of the span is copied from the time-coded transcript.
 
-### Example
+-----
+
+## Method
+
+1. **Audio to a sentence SRT.** ffmpeg converts the file to mono 16 kHz FLAC. Google Speech-to-Text (`latest_long`, enhanced, word time offsets, `en-US`) writes the transcript. A cue closes when a word ends in a period. An uploaded `.srt` skips this step and enters the same chain.
+
+2. **Boundaries, then a deterministic slice.** Gemini (`gemini-2.5-pro-preview-03-25`) returns only `{ "time": "HH:MM:SS", "topic": "..." }`, in order. `slice_topics` assigns each SRT cue from that start until the next topic's start. The last topic runs to the end of the file. The stored `topic_transcript` is those cue texts joined. Transcripts longer than 4 hours are extracted in 10-hour windows, merged by start time, then sliced the same way.
+
+3. **Labels sit on the span.** A file-level summary uses `gemini-2.5-flash-preview-04-17`. Each topic label uses `gemini-2.0-flash` over that topic's sliced transcript. The span remains the SRT text.
+
+4. **One embedding per topic.** Default model `text-embedding-004`, 768 dimensions, `task_type=RETRIEVAL_DOCUMENT`. The embedded string is topic title, topic summary, and sliced transcript. If that payload is too large, the service embeds the title and summary. A topic is skipped when that media id and timestamp already have a vector. Queries are embedded with `RETRIEVAL_QUERY`.
+
+5. **Vector search, then filters.** MongoDB `$vectorSearch` runs on `topic_embeddings.topic_embedding`. `numCandidates` defaults to 10 × (offset + page size). The score is `vectorSearchScore`. Channel handle, published-at range, and parent media id are applied after the vector stage. `topic_duration` is computed at read time: the next topic's start minus this start, or the media duration minus this start for the last topic.
+
+Celery runs the chain as transcribe → file summary → topic list → topic embeddings. Each stage records `pending`, `running`, `completed`, or `failed` on the media document. Topic extraction retries 3 times inside a 300-second soft limit. An embedding pass can finish as `partial_failure` when some topics are stored and others are not.
+
+-----
+
+## Result shape
+
+`GET /api/semantic_search_topics` returns a list of topic documents. Keys below are the ones the service projects. Values are illustrative.
 
 Query: `when did they discuss market strategy?`
 
 ```json
 {
-  "media_id": "yt_8f2a1c",
+  "topic_name": "Go-to-market sequencing",
+  "topic_timestamp": "00:14:22",
+  "topic_timestamp_seconds": 862,
+  "topic_duration": 103,
+  "topic_transcript": "…SRT cues from 00:14:22 until the next topic…",
+  "topic_summary": "…label written for that span…",
+  "score": 0.86,
+  "parent_media_id": "…",
   "title": "Q3 planning interview",
-  "topic": "Go-to-market sequencing",
-  "start": "00:14:22",
-  "end": "00:16:05",
-  "text": "We held the enterprise tier until the self-serve loop was measurable."
+  "youtube_id": "…",
+  "youtube_url": "…",
+  "channel_name": "…",
+  "channel_handle": "@channel",
+  "published_at": "…"
 }
 ```
 
-Illustrative shape. `start` and `end` are positions in the original media. `text` is the transcript span for that segment. `media_id` identifies the source.
+The web client opens the source at `topic_timestamp_seconds` (`&t=` on YouTube, `#t=` on the source page). The search route requests `offset=0` and caps the page at 10 hits, or 100 when the account has an active plan.
+
+A second endpoint, `GET /api/search`, matches titles, summaries, and topic names with a case-insensitive regular expression and returns media records. Semantic search is the path that returns transcript spans.
 
 -----
 
-## The Problem: Lost Knowledge in Long-Form Content
-
-Valuable passages sit inside hours of podcasts, lectures, and interviews. Finding a specific topic means scrubbing the timeline by hand. The recording holds the knowledge, and the useful moment is a span of that recording.
-
-## The Solution: A Semantic Index Anchored to the Recording
-
-Citeio builds that index from the time-coded transcript. It segments the transcript into topics, embeds those segments, and returns the passages that match a query. Each passage stays tied to timestamps in the original file, so the result can be checked against the source.
-
------
-
-## ► Core Features
-
-* **🎙️ Automated Ingestion & Transcription:**
-
-  * Ingest media from sources such as YouTube or a direct file.
-  * Standardize content into a consistent audio format for analysis.
-  * Produce a precise, time-coded transcript for every piece of media.
-
-* **🧠 AI-Powered Content Intelligence:**
-
-  * Identify and segment distinct topics inside a single file.
-  * Store each topic as a time range plus the transcript span it covers.
-  * Attach a short label to that span so the segment can be scanned and opened in the source.
-
-* **🔍 Powerful Semantic Search:**
-
-  * Query the library in natural language (for example, "when did they discuss market strategy?").
-  * Match concepts and ideas, and return the timestamped segment.
-  * Each hit includes the topic, the transcript excerpt, start and end times, and the source media.
-
-* **⚙️ Developer-First RESTful API:**
-
-  * Expose ingest, transcripts, topic segments, and search.
-  * Responses use the same inspectable objects: time-coded transcript lines and timestamped segments tied to the original media.
-
------
-
-## ► How It Works: The Analysis Pipeline
-
-The platform uses an automated pipeline that keeps every later step attached to the ingested media.
+## Pipeline
 
 ```mermaid
 graph LR;
 
-    subgraph "Ingestion & Processing"
-        A[User Submits URL/File] --> B{API Ingest};
-        B --> C((Task Queue));
-        C --> D(Download, Transcribe, & Segment);
+    subgraph "Ingestion"
+        A[URL, file, or SRT] --> B[Celery chain];
+        B --> C[16 kHz mono FLAC];
+        C --> D[Speech-to-Text sentence SRT];
     end
 
-    subgraph "Knowledge Generation"
-        D --> E{Topic segmentation over the time-coded transcript};
-        E --> F[Generate Vector Embeddings];
+    subgraph "Segmentation"
+        D --> E[Gemini: start time + title];
+        E --> F[Slice SRT between starts];
+        F --> G["text-embedding-004, 768-d"];
     end
 
-    subgraph "Storage & Retrieval"
-        E -- Metadata --> G[(Database)];
-        F -- Vectors --> H[(Vector DB)];
-        I[User Searches Query] --> J{API Query};
-        J --> G;
+    subgraph "Retrieval"
+        G --> H[(topic_embeddings)];
+        I[Query] --> J[$vectorSearch];
         J --> H;
-        J --> K[Timestamped segments];
+        J --> K[Filter channel, date, media];
+        K --> L[Span, start, duration, score, parent];
     end
 
     classDef database fill:#F97316,stroke:#9A3412,color:#fff;
-    class G,H database;
+    class H database;
 ```
 
-Search reads metadata and vectors together and returns segments with `start`, `end`, transcript text, topic, and media id.
+An uploaded SRT enters at segmentation. Filters run after nearest-neighbor search, so a selective filter can shorten a page.
 
 -----
 
-## ► Usage & Pricing Plans
+## Stack
 
-The table is the product's credit model, kept here as part of the architecture showcase. Purchases sit outside this repository. The domain citeio.com is no longer controlled by this project.
-
-| Plan       | Price | Analysis Credits   | Clips per Search | Credit Expiration |
-| :--------- | :---: | :----------------: | :--------------: | :---------------: |
-| **Free** | **$0** | 5                  | Up to 10         | 3 Days            |
-| **Starter**| **$3** | 10                 | Up to 100        | 15 Days           |
-| **Creative**| **$21** | 84                 | Up to 100        | 30 Days           |
-| **Pro** | **$84** | 420                | Up to 100        | 60 Days           |
-
-### Plan Details
-
-* **Free:** 5 credits for a first analysis. Includes the account's transcript library, folders, and semantic search that returns up to 10 clips. Credits expire in 3 days.
-
-* **Starter ($0.33 per credit):** 10 credits. Transcript library, folders, and up to 100 clips per search. Credits expire in 15 days.
-
-* **Creative ($0.25 per credit):** 84 credits. Same library and search limits, sized for longer projects. Credits expire in 30 days.
-
-* **Pro ($0.20 per credit):** 420 credits. Same library and search limits, sized for heavier research. Credits expire in 60 days.
-
-### Important Notes on Plans
-
-A repeat purchase of the same plan, while one is active, is queued. Credits from the queued plan start once the current plan's credits are depleted or expire. Different plan types can be active at the same time. Free-tier credits are for new accounts.
-
------
-
-## ► Tech Stack
-
-This project is built on a modern, robust, and scalable technology stack, leveraging Google's state-of-the-art AI infrastructure.
-
-| Category   | Technologies                                               |
+| Category | Technologies |
 | :--------- | :--------------------------------------------------------- |
-| **Frontend** | `Next.js`, `React`, `TypeScript`, `Tailwind CSS`           |
-| **Backend** | `Python`, `Flask`, `Celery`, `Redis`                     |
-| **AI / ML** | `Google Gemini`, `Google Text Embedding v4`                |
-| **Database** | `MongoDB` (for metadata), `MongoDB Vector Search` (for vectors)      |
-| **Deployment** | `Vercel` (Frontend), `Cloudflare Tunnel` (API), `Mac Mini` (Self-Hosted), `DigitalOcean` (BTCPay Server), `Docker` |
+| **Frontend** | `Next.js`, `React`, `TypeScript`, `Tailwind CSS` |
+| **Backend** | `Python`, `Flask`, `Celery`, `Redis` |
+| **Speech** | Google Speech-to-Text `latest_long`, word time offsets, sentence SRT |
+| **Boundaries** | `gemini-2.5-pro-preview-03-25` emits `{time, topic}` |
+| **Labels** | `gemini-2.5-flash-preview-04-17` (file), `gemini-2.0-flash` (topic) |
+| **Embeddings** | `text-embedding-004`, 768-d, `RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY` |
+| **Database** | `MongoDB` for media metadata, `MongoDB Vector Search` on `topic_embeddings` |
+| **Deployment** | `Vercel` (frontend), `Cloudflare Tunnel` (API), `Mac Mini` (self-hosted workers), `DigitalOcean` (BTCPay Server), `Docker` |
 
 -----
 
-## ► Project Status & Roadmap
+## Open questions
 
-**Current status:** Revival / reorganization. Core application code is private. The domain citeio.com is no longer controlled by this project. This public repository is a showcase of the architecture and retrieval approach.
+These are the next experiments on the same hit object. They are not in the running path.
 
-Application source lives in the private repositories [`citeio-web`](https://github.com/IndigoNakamoto/citeio-web) (Next.js) and [`citeio-api`](https://github.com/IndigoNakamoto/citeio-api) (Flask + Celery).
+* Combine the regex index and the vector index, then rerank, and still return the sliced span.
+* Move channel, date, and media filters into the `$vectorSearch` pre-filter so the candidate pool is the filtered set.
+* Keep the transcript inside the embedding when the payload exceeds the size limit. The current fallback embeds the title and summary.
+* Ask a follow-up question and answer it by citing `topic_timestamp`, `topic_duration`, and `topic_transcript`.
 
-**What's next:** Expand data sources, and keep every new retrieval path anchored to timestamped source segments.
+-----
 
-* **🤖 Search & Interaction:**
+## Where the code lives
 
-  * **Chat with Media:** Ask follow-up questions and receive answers that cite the timestamped segments they use.
-  * **Hybrid Search & Reranking:** Combine keyword and semantic matching, then rerank, and still return timestamped segments.
-  * **Cited Context:** A query can return a short note built from the matched segments, with each claim tied to a start and end time in the source.
-
-* **🌐 Expanding Data Sources:**
-
-  * **X (Twitter) Spaces:** Ingest and analyze live and recorded audio conversations from X Spaces.
-  * **Vimeo Integration:** Broaden support for professional video content hosted on Vimeo.
-  * **Direct User Uploads:** Allow users to securely upload their own private audio and video files for analysis.
-
-## ► Proprietary Source Code
-
-Citeio is a commercial product. Application source lives in the private repositories [`citeio-web`](https://github.com/IndigoNakamoto/citeio-web) and [`citeio-api`](https://github.com/IndigoNakamoto/citeio-api). This public repository showcases the architecture and the retrieval approach: timestamped segments tied to the original content.
-
-## ► Contact & Inquiries
-
-For business inquiries, enterprise licensing, or a private walkthrough of the architecture, reach out.
+Application source is private: [`citeio-web`](https://github.com/IndigoNakamoto/citeio-web) (Next.js) and [`citeio-api`](https://github.com/IndigoNakamoto/citeio-api) (Flask + Celery). This repository is the public research note.
 
 **Indigo Nakamoto** — **[x.com/indigo\_nakamoto](https://x.com/indigo_nakamoto)**
