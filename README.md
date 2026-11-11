@@ -1,31 +1,44 @@
 # Citeio
 
-![Status](https://img.shields.io/badge/status-revival%20in%20progress-orange)
+![Status](https://img.shields.io/badge/status-revival%20%2F%20reorganization-orange)
 ![License](https://img.shields.io/badge/license-proprietary-red)
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
 
-**Citeio is an intelligent media analysis platform that turns your long-form video and audio into a structured, searchable, and queryable knowledge base. Stop scrubbing through timelines—find the exact moment you need, instantly.**
+**Media ingest → time-coded transcript → topic segmentation → semantic search that returns timestamped segments tied to the original content.**
 
-<br />
+> **Status:** Revival / reorganization. Core application code is private. The domain citeio.com is no longer controlled by this project. This public repository is a showcase of the architecture and retrieval approach.
 
-<p align="center">
-<a href="https://www.citeio.com" target="\_blank"\>
-<strong>► See It In Action: Visit the Live Platform at Citeio.com ◄</strong>
-</a>
-</p>
+A search hit is a piece of the source you can inspect: topic, transcript excerpt, start and end times, and the media that excerpt came from.
+
+### Example
+
+Query: `when did they discuss market strategy?`
+
+```json
+{
+  "media_id": "yt_8f2a1c",
+  "title": "Q3 planning interview",
+  "topic": "Go-to-market sequencing",
+  "start": "00:14:22",
+  "end": "00:16:05",
+  "text": "We held the enterprise tier until the self-serve loop was measurable."
+}
+```
+
+Illustrative shape. `start` and `end` are positions in the original media. `text` is the transcript span for that segment. `media_id` identifies the source.
 
 -----
 
 ## The Problem: Lost Knowledge in Long-Form Content
 
-Valuable insights are buried in hours of podcasts, lectures, and interviews. Finding a specific topic means endless manual scrubbing, guessing timestamps, and wasting time. This "information overload" makes your media library a black box—full of content, but devoid of accessible knowledge.
+Valuable passages sit inside hours of podcasts, lectures, and interviews. Finding a specific topic means scrubbing the timeline by hand. The recording holds the knowledge, and the useful moment is a span of that recording.
 
-## The Solution: Your Media, Instantly Intelligible
+## The Solution: A Semantic Index Anchored to the Recording
 
-Citeio solves this by creating a "semantic index" of your content. It automatically processes media to understand *what* is being said and *when*. It identifies distinct topics, generates summaries, and allows you to search your entire library by concept or idea, not just by matching keywords.
+Citeio builds that index from the time-coded transcript. It segments the transcript into topics, embeds those segments, and returns the passages that match a query. Each passage stays tied to timestamps in the original file, so the result can be checked against the source.
 
 -----
 
@@ -33,29 +46,32 @@ Citeio solves this by creating a "semantic index" of your content. It automatica
 
 * **🎙️ Automated Ingestion & Transcription:**
 
-  * Seamlessly ingest media from sources like YouTube or direct uploads.
-  * Standardize all content into a high-quality audio format for optimal analysis.
-  * Generate precise, time-coded transcripts for every piece of media.
+  * Ingest media from sources such as YouTube or a direct file.
+  * Standardize content into a consistent audio format for analysis.
+  * Produce a precise, time-coded transcript for every piece of media.
 
 * **🧠 AI-Powered Content Intelligence:**
 
-  * Leverage advanced language models to automatically identify and segment distinct thematic topics within a single file.
-  * Receive concise, AI-generated summaries for both the entire media file and for each individual topic.
+  * Identify and segment distinct topics inside a single file.
+  * Store each topic as a time range plus the transcript span it covers.
+  * Attach a short label to that span so the segment can be scanned and opened in the source.
 
 * **🔍 Powerful Semantic Search:**
 
-  * Go beyond keyword search. Find what you're looking for based on concepts and ideas.
-  * Query your library with natural language (e.g., "when did they discuss market strategy?") and get back the exact, timestamped segment.
+  * Query the library in natural language (for example, "when did they discuss market strategy?").
+  * Match concepts and ideas, and return the timestamped segment.
+  * Each hit includes the topic, the transcript excerpt, start and end times, and the source media.
 
 * **⚙️ Developer-First RESTful API:**
 
-  * Integrate Citeio's capabilities into your own applications. A comprehensive API exposes all core functionalities, from ingestion to search.
+  * Expose ingest, transcripts, topic segments, and search.
+  * Responses use the same inspectable objects: time-coded transcript lines and timestamped segments tied to the original media.
 
 -----
 
 ## ► How It Works: The Analysis Pipeline
 
-The platform uses a sophisticated, automated pipeline designed for scalability and efficiency.
+The platform uses an automated pipeline that keeps every later step attached to the ingested media.
 
 ```mermaid
 graph LR;
@@ -67,7 +83,7 @@ graph LR;
     end
 
     subgraph "Knowledge Generation"
-        D --> E{AI Topic & Summary Analysis};
+        D --> E{Topic segmentation over the time-coded transcript};
         E --> F[Generate Vector Embeddings];
     end
 
@@ -77,18 +93,20 @@ graph LR;
         I[User Searches Query] --> J{API Query};
         J --> G;
         J --> H;
-        J --> K[Timestamped Results];
+        J --> K[Timestamped segments];
     end
 
     classDef database fill:#F97316,stroke:#9A3412,color:#fff;
     class G,H database;
 ```
 
+Search reads metadata and vectors together and returns segments with `start`, `end`, transcript text, topic, and media id.
+
 -----
 
 ## ► Usage & Pricing Plans
 
-Citeio offers a range of plans to suit your needs, from trying out the platform to handling large-scale research projects.
+The table is the product's credit model, kept here as part of the architecture showcase. Purchases sit outside this repository. The domain citeio.com is no longer controlled by this project.
 
 | Plan       | Price | Analysis Credits   | Clips per Search | Credit Expiration |
 | :--------- | :---: | :----------------: | :--------------: | :---------------: |
@@ -99,17 +117,17 @@ Citeio offers a range of plans to suit your needs, from trying out the platform 
 
 ### Plan Details
 
-* **Free:** Sign up for 5 free credits to try AI-powered YouTube video analysis. Explore our transcript library, organize research in folders, and use the new semantic search to retrieve up to 10 clips per query, pinpointing key moments. A perfect introduction.
+* **Free:** 5 credits for a first analysis. Includes the account's transcript library, folders, and semantic search that returns up to 10 clips. Credits expire in 3 days.
 
-* **Starter ($0.33 per credit):** Get 10 credits for AI video analysis, ideal for small projects. Access our full transcript library, organize your findings, and use semantic search to find up to 100 relevant clips per query. Uncover insights faster.
+* **Starter ($0.33 per credit):** 10 credits. Transcript library, folders, and up to 100 clips per search. Credits expire in 15 days.
 
-* **Creative ($0.25 per credit):** Power up with 84 credits for in-depth video analysis. Explore our extensive transcript library, organize your research, and leverage semantic search to retrieve up to 100 relevant clips per query for your creative projects.
+* **Creative ($0.25 per credit):** 84 credits. Same library and search limits, sized for longer projects. Credits expire in 30 days.
 
-* **Pro ($0.20 per credit):** Maximize your research with 420 credits for comprehensive video analysis. Dive deep into our transcript library, organize effectively, and utilize powerful semantic search to retrieve up to 100 relevant clips per query for your most demanding projects.
+* **Pro ($0.20 per credit):** 420 credits. Same library and search limits, sized for heavier research. Credits expire in 60 days.
 
 ### Important Notes on Plans
 
-For paid plans, purchasing a new plan of the same type while one is active will queue it. Credits from the new plan activate once the current plan's credits are depleted or expire. Different types of plans can be active simultaneously. Free plan credits are typically for new users.
+A repeat purchase of the same plan, while one is active, is queued. Credits from the queued plan start once the current plan's credits are depleted or expire. Different plan types can be active at the same time. Free-tier credits are for new accounts.
 
 -----
 
@@ -129,17 +147,17 @@ This project is built on a modern, robust, and scalable technology stack, levera
 
 ## ► Project Status & Roadmap
 
-**Current Status:** Citeio is in **revival / reorganization**. The product stack lives in private repos [`citeio-web`](https://github.com/IndigoNakamoto/citeio-web) (Next.js) and [`citeio-api`](https://github.com/IndigoNakamoto/citeio-api) (Flask + Celery). The public site and demo are being brought back up — treat live URLs as unreliable until health checks are green again.
+**Current status:** Revival / reorganization. Core application code is private. The domain citeio.com is no longer controlled by this project. This public repository is a showcase of the architecture and retrieval approach.
 
-This public repository remains a **showcase** (architecture, vision, pricing). Proprietary application source is not published here.
+Application source lives in the private repositories [`citeio-web`](https://github.com/IndigoNakamoto/citeio-web) (Next.js) and [`citeio-api`](https://github.com/IndigoNakamoto/citeio-api) (Flask + Celery).
 
-**What's Next:** Our roadmap is focused on expanding data sources and deepening analytical capabilities.
+**What's next:** Expand data sources, and keep every new retrieval path anchored to timestamped source segments.
 
-* **🤖 Advanced Search & Interaction:**
+* **🤖 Search & Interaction:**
 
-  * **Chat with Media:** Go beyond search and engage in a conversation with your video content to ask follow-up questions and explore topics dynamically.
-  * **Hybrid Search & Reranking:** Implement advanced search techniques combining keyword and semantic matching, with a reranking layer to deliver hyper-relevant results.
-  * **Contextual Summaries:** Move from simple clip retrieval to providing AI-generated summaries and analysis based on the context of your search query.
+  * **Chat with Media:** Ask follow-up questions and receive answers that cite the timestamped segments they use.
+  * **Hybrid Search & Reranking:** Combine keyword and semantic matching, then rerank, and still return timestamped segments.
+  * **Cited Context:** A query can return a short note built from the matched segments, with each claim tied to a start and end time in the source.
 
 * **🌐 Expanding Data Sources:**
 
@@ -149,12 +167,10 @@ This public repository remains a **showcase** (architecture, vision, pricing). P
 
 ## ► Proprietary Source Code
 
-Please note that Citeio is a commercial product. Application source lives in private repositories [`citeio-web`](https://github.com/IndigoNakamoto/citeio-web) and [`citeio-api`](https://github.com/IndigoNakamoto/citeio-api). This public repository is a professional showcase of architecture, features, and vision.
+Citeio is a commercial product. Application source lives in the private repositories [`citeio-web`](https://github.com/IndigoNakamoto/citeio-web) and [`citeio-api`](https://github.com/IndigoNakamoto/citeio-api). This public repository showcases the architecture and the retrieval approach: timestamped segments tied to the original content.
 
 ## ► Contact & Inquiries
 
-For business inquiries, enterprise licensing, or to request a private demo, please reach out.
+For business inquiries, enterprise licensing, or a private walkthrough of the architecture, reach out.
 
-**Indigo Nakamoto** - **[x.com/indigo\_nakamoto](https://x.com/indigo_nakamoto)**
-
-Project Website: **[https://citeio.com](https://citeio.com)**
+**Indigo Nakamoto** — **[x.com/indigo\_nakamoto](https://x.com/indigo_nakamoto)**
